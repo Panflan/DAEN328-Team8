@@ -6,6 +6,13 @@ __pycache__/
 # Don't import large JSON data file
 data/imported_data.json
 
+# DO NOT IMPORT .env FILE!!!
+# ONLY IMPORT THE EXAMPLE FILE
+.env
+*.env
+.env.*
+!.env.example
+
 # Distribution / packaging
 .Python
 build/
