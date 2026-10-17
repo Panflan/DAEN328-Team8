@@ -13,6 +13,9 @@ data/imported_data.json
 .env.*
 !.env.example
 
+__pycache__/
+*.pyc
+
 # Distribution / packaging
 .Python
 build/

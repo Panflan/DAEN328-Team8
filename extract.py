@@ -2,45 +2,7 @@ import requests
 import json
 import os
 from dotenv import load_dotenv
-
-# ==================================== #
-# HELPER FUNCTIONS                     #
-# ==================================== #
-def save_state(timestamp, record_id):
-    '''
-    Saves last successfully extracted record
-    '''
-
-    with open(state_path, "w") as file:
-        json.dump({
-            "last_updated": timestamp,
-            "last_id": record_id
-        }, file, indent=4)
-
-def load_state():
-    '''
-    Loads last successfully extracted record
-
-    Returns:
-        tuple:
-            (last_updated, last_id)
-
-        If no state exists:
-            (None, None)
-    '''
-
-    if os.path.exists(state_path):
-        
-        with open(state_path, "r") as file:
-            state = json.load(file)
-
-        return (
-            state.get("last_updated"),
-            state.get("last_id")
-        )
-
-    return None, None
-
+from helpers import load_state, save_state
 
 # ==================================== #
 # ENVIRONMENT VARIABLES & CONSTANTS    #
