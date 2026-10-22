@@ -1,8 +1,9 @@
 import os
 import psycopg2
-
+from dotenv import load_dotenv
 
 def get_connection():
+    load_dotenv()
     return psycopg2.connect(
         host = os.getenv("POSTGRES_HOST"),
         port = os.getenv("POSTGRES_PORT"),
@@ -22,32 +23,6 @@ def create_tables(connection):
         cursor.execute(schema)
 
     connection.commit()
-
-def load_state(pipeline_name):
-    connection = get_connection()
-
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT last_updated, last_id
-                FROM etl_state
-                WHERE pipeline_name = %s;
-                """, (
-                    pipeline_name,
-                )
-            )
-
-            row = cursor.fetchone()
-
-        if row is None:
-            return None, None
-
-        return row[0], row[1]
-
-    finally:
-        connection.close()
-
 
 def load_state(pipeline_name):
     connection = get_connection()
