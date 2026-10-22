@@ -33,7 +33,7 @@ services:
       db:
         condition: service_healthy
 
-    command: python etl.py
+    command: python -u etl.py
 
   # ADD STREAMLIT CONTAINER HERE #
   # ---------------------------- #
