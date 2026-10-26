@@ -17,7 +17,7 @@ def extract_data():
 
     data_path = os.getenv("RAW_DATA") # File path for the raw json data
 
-    LIMIT = 10000 # For pagination, batch size per extract
+    LIMIT = 100 # For pagination, batch size per extract
 
     offset = 0 # For pagination, chooses which rows to gather
 
