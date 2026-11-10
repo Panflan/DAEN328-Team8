@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS cdc_state (
+    source_id TEXT PRIMARY KEY,
+    row_hash TEXT NOT NULL,
+    first_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    run_id BIGINT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS cdc_change_log (
+    event_id BIGSERIAL PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    operation VARCHAR(10) NOT NULL,
+    changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS cdc_runs (
+    run_id BIGSERIAL PRIMARY KEY,
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP
+);

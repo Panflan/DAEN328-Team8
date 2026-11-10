@@ -5,77 +5,45 @@ from dotenv import load_dotenv
 def get_connection():
     load_dotenv()
     return psycopg2.connect(
-        host = os.getenv("POSTGRES_HOST"),
-        port = os.getenv("POSTGRES_PORT"),
-        dbname = os.getenv("POSTGRES_DB"),
-        user = os.getenv("POSTGRES_USER"),
-        password = os.getenv("POSTGRES_PASSWORD")
+        host = os.getenv("PSQL_HOST"),
+        port = os.getenv("PSQL_PORT"),
+        dbname = os.getenv("PSQL_DB"),
+        user = os.getenv("PSQL_USER"),
+        password = os.getenv("PSQL_PASSWORD")
     )
 
-def create_tables(connection):
+def get_cdc_connection():
+    load_dotenv()
+    return psycopg2.connect(
+        host = os.getenv("CDC_HOST"),
+        port = os.getenv("CDC_PORT"),
+        dbname = os.getenv("CDC_DB"),
+        user = os.getenv("CDC_USER"),
+        password = os.getenv("CDC_PASSWORD")
+    )
+
+def create_cdc_tables(cdc_conn):
 
     # Reads the schema file with all of the postgres tables
-    with open("schema.sql", "r") as file:
+    with open("sql/cdc_schema.sql", "r") as file:
         schema = file.read()
 
     # Executes the table creation in postgres
-    with connection.cursor() as cursor:
+    with cdc_conn.cursor() as cursor:
         cursor.execute(schema)
 
-    connection.commit()
+    cdc_conn.commit()
 
-def load_state(pipeline_name):
-    connection = get_connection()
+def create_psql_tables(psql_conn):
 
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT last_updated, last_id
-                FROM etl_state
-                WHERE pipeline_name = %s;
-                """, (
-                    pipeline_name,
-                )
-            )
+    # Reads the schema file with all of the postgres tables
+    with open("sql/psql_schema.sql", "r") as file:
+        schema = file.read()
 
-            row = cursor.fetchone()
+    # Executes the table creation in postgres
+    with psql_conn.cursor() as cursor:
+        cursor.execute(schema)
 
-        if row is None:
-            return None, None
-
-        return row[0], row[1]
-
-    finally:
-        connection.close()
+    psql_conn.commit()
 
 
-def save_state(pipeline_name, last_updated, last_id):
-    connection = get_connection()
-
-    try:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                INSERT INTO etl_state (
-                    pipeline_name,
-                    last_updated,
-                    last_id
-                )
-                VALUES (%s, %s, %s)
-
-                ON CONFLICT (pipeline_name)
-                DO UPDATE SET
-                    last_updated = EXCLUDED.last_updated,
-                    last_id = EXCLUDED.last_id;
-                """, (
-                    pipeline_name,
-                    last_updated,
-                    last_id
-                )
-            )
-
-        connection.commit()
-
-    finally:
-        connection.close()
