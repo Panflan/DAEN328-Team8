@@ -6,15 +6,15 @@ Howdy! This is *Team 8's* GitHub repository for our term project in Dr. Mark Law
 DO NOT COMMIT TO THE MAIN BRANCH YET. MAKE YOUR OWN BRANCH AND WORK THROUGH THERE. [Information on how to do that can be found here.](https://docs.github.com/en/pull-requests/how-tos/commit-changes/managing-branches-within-your-repository)
 
 ## Table of Contents
-* [Local Setup](#LocalSetup)
-  * [Local Repository Access](#GettingLocalAccesstotheRepository)
-  * [Environmental Variables](#EnvironmentalVariables)
-  * [Docker Compose](#RunningtheProjectw/Docker)
+* [Local Setup](#Local-Setup)
+  * [Local Repository Access](#Getting-Local-Access-to-the-Repository)
+  * [Environmental Variables](#Environmental-Variables)
+  * [Docker Compose](#Running-the-Project-w/Docker)
 * [Extraction](#Extraction)
 * [Transformation](#Transformation)
 * [Loading](#Loading)
 * [Visualization](#Visualization)
-* [ETL Orchestration](#ETLOrchestration)
+* [ETL Orchestration](#ETL-Orchestration)
 * [Dockerization](#Dockerization)
 
 ## Local Setup
