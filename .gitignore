@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 
 # Don't import large JSON data file
-data/imported_data.json
+data/*.jsonl
 
 # DO NOT IMPORT .env FILE!!!
 # ONLY IMPORT THE EXAMPLE FILE
@@ -12,6 +12,7 @@ data/imported_data.json
 *.env
 .env.*
 !.env.example
+!.env.sample
 
 __pycache__/
 *.pyc

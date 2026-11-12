@@ -1,43 +1,68 @@
-# Chicago Crime Data Streamlit Dashboard - DAEN 328 Team 8 - Texas A&M University
-Howdy! This is Team 8's GitHub repository for our term project in Mark Lawley's DAEN 328 - Section 500 class. The goal of this project is to create a well-designed ETL program for the crime data from the city of Chicago, where the final live-updating dashboard will be built on the StreamLit library in Python.
+# NYC 311 Service Requests Dashboard - DAEN 328 Team 8
 
-## DISCLAIMER
-DO NOT COMMIT TO THE MAIN BRANCH YET. MAKE YOUR OWN BRANCH AND WORK THROUGH THERE. [Information on how to do that can be found here.](https://docs.github.com/en/pull-requests/how-tos/commit-changes/managing-branches-within-your-repository)
+This project extracts NYC 311 Service Requests from 2020 to Present, cleans the records, loads them into PostgreSQL, and will visualize the results in Streamlit. The source is the [NYC Open Data API](https://data.cityofnewyork.us/resource/erm2-nwe9.json); no API key is required.
 
-## Table of Contents
-***I'll do later, I'm lazy***
+## Run the project
 
-## Local Setup
-### Getting Local Access to the Repository 
-To gain access to the most up to date versions of the source files from the main branch on your machine, go to your terminal (on MacOS/Linux) or your VSCode terminal (on Windows). Navigate to the directory you'd like to clone into with
+1. Install and open Docker Desktop.
+2. Create the local configuration file:
+
+   ```bash
+   cp .env.sample .env
+   ```
+
+3. Start the stack:
+
+   ```bash
+   docker compose up --build
+   ```
+
+The initial run extracts the 50,000 most recent service requests. Later runs query only records with a `unique_key` above the saved high-water mark; the stable API ID is the team's incremental identifier. The checkpoint is stored in PostgreSQL's `etl_state` table only after the load transaction succeeds. Raw API records are saved locally in `data/nyc_311_raw.jsonl` and are ignored by Git.
+
+Run tests in the ETL image with:
+
 ```bash
-cd /directory/location/here/...
+docker compose run --rm etl pytest
 ```
-Once you are in the preferred directory, clone the repository into it using the command:
-```bash
-git clone https://github.com/Panflan/DAEN328-Team8.git
-```
-If you have an SSH key pair configured between your local machine and your GitHub account, you can also use:
-```bash
-git clone git@github.com:Panflan/DAEN328-Team8.git
-```
-At this point you should be able to run the project locally, if any issues are encountered, [consult this page](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository)
 
-### Environmental Variables
-No API keys or secrets are needed for the project at the moment. `.env.example` provides the necessary structure for your local `.env` file. You will need the API endpoint link (in the example file), a directory path for where you would like to store the raw data, and your postgres credentials
+## PostgreSQL schema
 
-### Running the Project w/Docker
-In order to test the project, you need to have *Docker Desktop* installed, [you can find the download here](https://www.docker.com/products/docker-desktop/). When trying to run tests on the project, you must have docker desktop open in the background so that the *docker daemon* is awake. Once you have opened docker desktop, you can enter the following command into your terminal to run the project:
-```bash
-docker compose up --build
-```
-If you are unfamiliar with the terminal, know that you can always stop the docker process by pressing `ctrl + C`
+`service_requests` is the fact table and is keyed by the API's stable `unique_key`. It references normalized complaint-type, agency, and location dimensions. The loader creates all tables and indexes through `schema.sql`, then uses PostgreSQL upserts so reruns update an existing request rather than creating duplicates.
 
-### Python Setup
-When trying to test the project, all files run through the `etl.py` docker container. This means that all other files in the project must have a wrapper (e.g., all data transform functionality from the `transform.py` file must be wrapped in a single function like `transform()`), and then the wrapper function must be inserting into `etl.py` after all dependent code. Additionally, each wrapper function added to `etl.py` must be imported from its respective file, for example:
-```python
-from helpers import get_connection, create_tables
-from extract import extract_data
-from transform import transform_data
+```mermaid
+erDiagram
+    COMPLAINT_TYPES ||--o{ SERVICE_REQUESTS : categorizes
+    AGENCIES ||--o{ SERVICE_REQUESTS : handles
+    LOCATIONS ||--o{ SERVICE_REQUESTS : occurs_at
+
+    COMPLAINT_TYPES {
+        bigint complaint_type_id PK
+        varchar complaint_type
+        varchar descriptor
+    }
+    AGENCIES {
+        bigint agency_id PK
+        varchar agency_code
+        varchar agency_name
+    }
+    LOCATIONS {
+        bigint location_id PK
+        varchar borough
+        varchar incident_zip
+    }
+    SERVICE_REQUESTS {
+        bigint unique_key PK
+        bigint complaint_type_id FK
+        bigint agency_id FK
+        bigint location_id FK
+        timestamptz created_date
+        timestamptz closed_date
+        timestamptz source_updated_at
+    }
 ```
-For docker to run the file correctly, you must also insert the names of any third-party (not python native) libraries/modules being used into `requirements.txt`. Otherwise the container will not download the necessary packages.
+
+## Transform-to-load contract
+
+`load.py` accepts an iterable of cleaned dictionaries. The transform module must preserve `unique_key`, `created_date`, and `:updated_at`; those fields are required for the primary key, source-update audit value, and ETL checkpoint. It can also provide `complaint_type`, `descriptor`, `agency`, `agency_name`, `borough`, `incident_zip`, `community_board`, `city`, `latitude`, `longitude`, `closed_date`, `status`, `resolution_description`, `incident_address`, and `location_type`.
+
+When `transform.py` is merged, `etl.py` automatically calls its `transform_data(records)` function before loading. Until then, the ETL logs that it has loaded the extracted records unchanged.

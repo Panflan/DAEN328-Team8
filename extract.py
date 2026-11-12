@@ -1,153 +1,89 @@
-import requests
+"""Get NYC 311 records from the public API."""
+
 import json
 import os
+import time
 
+import requests
 from dotenv import load_dotenv
-from helpers import load_state, save_state
+
+from helpers import load_state
 
 
 def extract_data():
-    # ==================================== #
-    # ENVIRONMENT VARIABLES & CONSTANTS    #
-    # ==================================== #
+    """Get the first sample or only records with a new unique key."""
+    load_dotenv()
 
-    load_dotenv() # Loads all environmental variables from your .env file
+    url = os.getenv("API_ENDPOINT")
+    raw_data_path = os.getenv("RAW_DATA", "data/nyc_311_raw.jsonl")
+    batch_size = int(os.getenv("BATCH_SIZE", "10000"))
+    initial_limit = int(os.getenv("INITIAL_LOAD_LIMIT", "50000"))
 
-    url = os.getenv("API_ENDPOINT") # Chicago PD Crime Dataset
+    if not url:
+        raise ValueError("API_ENDPOINT is missing from .env")
 
-    data_path = os.getenv("RAW_DATA") # File path for the raw json data
+    last_updated, last_id = load_state("nyc_311_extract")
+    first_run = last_id is None
+    page_cursor = None
+    records = []
 
-    LIMIT = 100 # For pagination, batch size per extract
-
-    offset = 0 # For pagination, chooses which rows to gather
-
-    last_updated, last_id = load_state("crime_extract") # For pagination, loads current data write's state
-
-    # To convert from default (python datetime) to str
-    if last_updated is not None:
-        last_updated = last_updated.isoformat()
-
-    headers = {"Accept": "application/json"} # Clarifies the data is retrieved as json
-
-    batch_num = 0 # For logging number of batches processed during a loop
-
-    total_records = 0 # For logging number of records processed during a loop
-
-
-
-    # ==================================== #
-    # PAGINATED EXTRACTION LOOP            #
-    # ==================================== #
     while True:
+        if first_run:
+            limit = min(batch_size, initial_limit - len(records))
+            order = "unique_key DESC"
+        else:
+            limit = batch_size
+            order = "unique_key ASC"
 
-        # Sets the parameters for pagination
         params = {
-            '$limit': LIMIT,
-            '$order': 'updated_on ASC, id ASC'
-            # ^ Sorts from most the lowest id on the oldest update to the highest id on the newest update
+            "$select": "*,:updated_at",
+            "$limit": limit,
+            "$order": order,
         }
 
-        # Sets params after checkpoint is achieved
-        if last_updated is not None:
+        if first_run and page_cursor is not None:
+            params["$where"] = f"unique_key < '{page_cursor}'"
+        elif not first_run:
+            params["$where"] = f"unique_key > '{last_id}'"
 
-            params["$where"] = (
-                f"updated_on > '{last_updated}' "
-                f"OR "
-                f"(updated_on = '{last_updated}' AND id > {last_id})"
-            )
+        # Try up to three times because a public API can be temporarily unavailable.
+        for attempt in range(3):
+            try:
+                response = requests.get(url, params=params, timeout=30)
+                response.raise_for_status()
+                break
+            except requests.RequestException as error:
+                if attempt == 2:
+                    raise RuntimeError(f"NYC 311 API request failed: {error}") from error
+                print("API request failed. Trying again...")
+                time.sleep(2)
 
-        # Extracts the data
-        response = requests.get(
-            url, 
-            params = params,
-            headers = headers
-        )
-
-        if batch_num == 0:
-            request = response.request
-
-            print(f"--- REQUEST ---")
-            print(f"-- {request.method}:/resource/ijzp-q8t2.json?...")
-            print(f"-- Host: data.cityofchicago.org")
-            print(f"---------------")
-
-            print('\n')
-
-            print("--- RESPONSE ---")
-            print(f"-- HTTP/1.1 {response.status_code} {response.reason}")
-            k = 0
-            for key, value in response.headers.items():
-                k += 1
-                if k > 6:
-                    break
-                print(f"-- {key}: {value}")
-            print(f"---------------\n")
-
-        # If extraction fails, prints trace and breaks pagination loop
-        if response.status_code != 200:
-            print("Failed to fetch data.")
-            print(f"Status Code: {response.status_code}")
-            print(response.text)
+        batch = response.json()
+        if not batch:
             break
 
-        batch_num += 1
+        records.extend(batch)
 
-        batch = response.json() # Converts the data to json
+        if first_run:
+            # The first row has the largest key because the API is sorted descending.
+            if last_id is None:
+                last_id = int(batch[0]["unique_key"])
+                last_updated = batch[0][":updated_at"]
+            page_cursor = batch[-1]["unique_key"]
+        else:
+            # The last row has the largest key because the API is sorted ascending.
+            last_id = int(batch[-1]["unique_key"])
+            last_updated = batch[-1][":updated_at"]
 
-        # Breaks loop when there are no more records left to extract
-        if len(batch) == 0:
+        if len(batch) < limit:
+            break
+        if first_run and len(records) >= initial_limit:
             break
 
+    if records:
+        os.makedirs(os.path.dirname(raw_data_path) or ".", exist_ok=True)
+        with open(raw_data_path, "w", encoding="utf-8") as raw_file:
+            for record in records:
+                raw_file.write(json.dumps(record) + "\n")
 
-
-    # ==================================== #
-    # WRITING BATCH DATA TO STORAGE        #
-    # ==================================== #
-
-        # Writes the extracted data to raw data json file
-        with open(data_path, "a", encoding="utf-8") as file:
-
-            for record in batch:
-                file.write(json.dumps(record) + "\n") # Appends new record to file
-
-
-        total_records += len(batch) # Updates the total number of records
-
-        print(
-            f"Fetched {len(batch)} records {f"({batch_num})":>2} )"
-            f"| Total: {total_records}"
-        )
-
-    # ==================================== #
-    # UPDATE CHECKPOINT                    #
-    # ==================================== #
-
-        last_record = batch[-1] # Gets the last record in the batch
-
-        # Gets the update time & id on the last record
-        last_updated = last_record["updated_on"]
-        last_id = last_record["id"]
-
-        # Saves current state of the data for pagination
-        save_state(
-            "crime_extract",
-            last_updated,
-            last_id
-        )
-
-        # No new records need to be retrieved if batch size is less than the limit
-        if len(batch) < LIMIT:
-            break
-
-
-    print(f"Extraction complete | {total_records} records fetched")
-
-if __name__ == "__main__":
-    extract_data()
-
-
-
-
-
-
-
+    return records, last_updated, last_id
