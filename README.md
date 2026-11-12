@@ -1,11 +1,21 @@
-# Chicago Crime Data Streamlit Dashboard - DAEN 328 Team 8 - Texas A&M University
-Howdy! This is Team 8's GitHub repository for our term project in Mark Lawley's DAEN 328 - Section 500 class. The goal of this project is to create a well-designed ETL program for the crime data from the city of Chicago, where the final live-updating dashboard will be built on the StreamLit library in Python.
+# NYC 311 Service Requests ETL Data Pipeline
+
+Howdy! This is *Team 8's* GitHub repository for our term project in Dr. Mark Lawley's DAEN 328 - Section 500 class. The goal of this project is to create a well-designed ETL data pipeline that extracts data from the "NYC 311 Service Requests from 2020 to Present" dataset API, cleans/normalizes/transforms the data, loads the data into PostgreSQL, & serves data-driven analytics to the end user via a Streamlit dashboard.
 
 ## DISCLAIMER
 DO NOT COMMIT TO THE MAIN BRANCH YET. MAKE YOUR OWN BRANCH AND WORK THROUGH THERE. [Information on how to do that can be found here.](https://docs.github.com/en/pull-requests/how-tos/commit-changes/managing-branches-within-your-repository)
 
 ## Table of Contents
-***I'll do later, I'm lazy***
+* [Local Setup](#LocalSetup)
+  * [Local Repository Access](#GettingLocalAccesstotheRepository)
+  * [Environmental Variables](#EnvironmentalVariables)
+  * [Docker Compose](#RunningtheProjectw/Docker)
+* [Extraction](#Extraction)
+* [Transformation](#Transformation)
+* [Loading](#Loading)
+* [Visualization](#Visualization)
+* [ETL Orchestration](#ETLOrchestration)
+* [Dockerization](#Dockerization)
 
 ## Local Setup
 ### Getting Local Access to the Repository 
@@ -33,11 +43,16 @@ docker compose up --build
 ```
 If you are unfamiliar with the terminal, know that you can always stop the docker process by pressing `ctrl + C`
 
-### Python Setup
-When trying to test the project, all files run through the `etl.py` docker container. This means that all other files in the project must have a wrapper (e.g., all data transform functionality from the `transform.py` file must be wrapped in a single function like `transform()`), and then the wrapper function must be inserting into `etl.py` after all dependent code. Additionally, each wrapper function added to `etl.py` must be imported from its respective file, for example:
-```python
-from helpers import get_connection, create_tables
-from extract import extract_data
-from transform import transform_data
-```
-For docker to run the file correctly, you must also insert the names of any third-party (not python native) libraries/modules being used into `requirements.txt`. Otherwise the container will not download the necessary packages.
+
+## Extraction
+
+## Transformation
+
+## Loading
+
+## Visualization
+
+## ETL Orchestration
+
+## Dockerization
+
