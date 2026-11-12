@@ -4,10 +4,12 @@ import os
 import logging
 import hashlib
 
+from dotenv import load_dotenv
 from helpers import get_cdc_connection
 
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from urllib.parse import urlparse
-from dotenv import load_dotenv
 
 logging.basicConfig(
         level=logging.INFO,
@@ -28,12 +30,24 @@ class Extractor:
             `last_created_date` - The 'created_date' field of the last record pulled
             `last_unique_key` - The 'unique_key' field of the last record pulled
             `logger` - Extractor specific logger
+            `session` - Keeps the extractor connected to the API even if it fails to extract
 
         Args:
             headers: HTTP headers for the extraction request
             batch_size: Size of each paginated batch
         
         """
+
+        # Handles errors by retrying the connection
+        retry = Retry(
+            total=5,
+            backoff_factor=2,
+            status_forcelist=[429, 500, 502, 503, 504],
+            allowed_methods=["GET"]
+        )
+
+        adapter = HTTPAdapter(max_retries=retry)
+
 
         load_dotenv()
 
@@ -49,6 +63,9 @@ class Extractor:
         self.last_unique_key = None
 
         self.logger = logging.getLogger(__name__)
+
+        self.session = requests.Session()
+        self.session.mount("https://", adapter)
 
 
 
@@ -77,7 +94,7 @@ class Extractor:
             )
 
         try:
-            response = requests.get(
+            response = self.session.get(
                 self.endpoint,
                 params=params,
                 headers=self.rq_headers,

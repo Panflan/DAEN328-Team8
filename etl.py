@@ -4,7 +4,7 @@ import logging
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
+    format="%(asctime)s | %(name)s | %(levelname)s | %(message)s"
 )
 
 etl_logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ def main():
         headers = {
             "Accept": "application/json"
         },
-        batch_size = 10000
+        batch_size = 100000
     )
     etl_logger.info("New extractor set up")
 
