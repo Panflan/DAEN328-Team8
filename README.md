@@ -15,6 +15,8 @@ DO NOT COMMIT TO THE MAIN BRANCH YET. MAKE YOUR OWN BRANCH AND WORK THROUGH THER
   * [The `CDC` Class](#the-cdc-class)
 * [Transformation](#transformation)
 * [Loading](#loading)
+  * [PostgreSQL Schema](#postgresql-schema)
+  * [Transform-to-Load Contract](#transform-to-load-contract)
 * [Visualization](#visualization)
 * [ETL Orchestration](#etl-orchestration)
 * [Dockerization](#dockerization)
@@ -43,7 +45,12 @@ In order to test the project, you need to have *Docker Desktop* installed, [you 
 ```bash
 docker compose up --build
 ```
-If you are unfamiliar with the terminal, know that you can always stop the docker process by pressing `ctrl + C`
+If you are unfamiliar with the terminal, know that you can always stop the docker process by pressing `ctrl + C`.
+
+Additionally, if you wish to run tests on the ETL image using PyTest, you can instead run the project with the command:
+```bash
+docker compose run --rm etl pytest
+```
 
 
 ## Extraction
@@ -159,6 +166,61 @@ Intakes the connection to the CDC PSQL database, and a list of strings containin
 ## Transformation
 
 ## Loading
+
+### PostgreSQL Schema
+`service_requests` is the fact table and is keyed by the API's stable `unique_key`. It references normalized complaint-type, agency, and location dimensions. The loader creates all tables and indexes through `psql_schema.sql`, then uses PostgreSQL upserts so reruns update an existing request rather than creating duplicates.
+
+```mermaid
+erDiagram
+    COMPLAINT_TYPES ||--o{ SERVICE_REQUESTS : categorizes
+    AGENCIES ||--o{ SERVICE_REQUESTS : handles
+    LOCATIONS ||--o{ SERVICE_REQUESTS : occurs_at
+
+    COMPLAINT_TYPES {
+        bigint complaint_type_id PK
+        varchar complaint_type
+        varchar descriptor
+    }
+    AGENCIES {
+        bigint agency_id PK
+        varchar agency_code
+        varchar agency_name
+    }
+    LOCATIONS {
+        bigint location_id PK
+        varchar borough
+        varchar incident_zip
+    }
+    SERVICE_REQUESTS {
+        bigint unique_key PK
+        bigint complaint_type_id FK
+        bigint agency_id FK
+        bigint location_id FK
+        timestamptz created_date
+        timestamptz closed_date
+        timestamptz source_updated_at
+    }
+```
+
+### Transform-to-load Contract
+Inside of the ETL image, the `load_record(records, connection)` function from `load.py` accepts an iterable of cleaned dictionaries (from the `transform.py` module), which must contain `unique_key` and `created_date`, and can also contain: 
+* `complaint_type`
+* `descriptor`
+* `agency`
+* `agency_name`
+* `borough`
+* `incident_zip`
+* `community_board`
+* `city`
+* `latitude`
+* `longitude`
+* `closed_date`
+* `status`
+* `resolution_description`
+* `incident_address`
+* `location_type`
+
+When `transform.py` is merged, `etl.py` automatically calls its `transform_data(records)` function before loading. Until then, the ETL logs that it has loaded the extracted records unchanged.
 
 ## Visualization
 

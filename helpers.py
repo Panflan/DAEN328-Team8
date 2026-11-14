@@ -47,3 +47,4 @@ def create_psql_tables(psql_conn):
     psql_conn.commit()
 
 
+
