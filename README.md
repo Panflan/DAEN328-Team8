@@ -6,18 +6,18 @@ Howdy! This is *Team 8's* GitHub repository for our term project in Dr. Mark Law
 DO NOT COMMIT TO THE MAIN BRANCH YET. MAKE YOUR OWN BRANCH AND WORK THROUGH THERE. [Information on how to do that can be found here.](https://docs.github.com/en/pull-requests/how-tos/commit-changes/managing-branches-within-your-repository)
 
 ## Table of Contents
-* [Local Setup](#Local-Setup)
-  * [Local Repository Access](#Getting-Local-Access-to-the-Repository)
-  * [Environmental Variables](#Environmental-Variables)
-  * [Docker Compose](#Running-the-Project-with-Docker)
-* [Extraction](#Extraction)
-  * [The `Extractor` Class](#The-`Extractor`-Class)
-  * [The `CDC` Class](#The-`CDC`-Class)
-* [Transformation](#Transformation)
-* [Loading](#Loading)
-* [Visualization](#Visualization)
-* [ETL Orchestration](#ETL-Orchestration)
-* [Dockerization](#Dockerization)
+* [Local Setup](#local-setup)
+  * [Local Repository Access](#getting-local-access-to-the-repository)
+  * [Environmental Variables](#environmental-variables)
+  * [Docker Compose](#running-the-project-with-docker)
+* [Extraction](#extraction)
+  * [The `Extractor` Class](#the-extractor-class)
+  * [The `CDC` Class](#the-cdc-class)
+* [Transformation](#transformation)
+* [Loading](#loading)
+* [Visualization](#visualization)
+* [ETL Orchestration](#etl-orchestration)
+* [Dockerization](#dockerization)
 
 ## Local Setup
 ### Getting Local Access to the Repository 
@@ -47,11 +47,10 @@ If you are unfamiliar with the terminal, know that you can always stop the docke
 
 
 ## Extraction
-The extraction branch of the project was engineering by **Will Gallegos**. We tackled the extraction process using an object oriented approach, encapsulating functionality inside of 2 primary classes that are initialized as objects (one of these classes uses composition for a facade-like interface , but that will be further documented below). 
+The extraction branch of the project was engineered by **Will Gallegos**. We tackled the extraction process using an object oriented approach, encapsulating functionality inside of 2 primary classes that are initialized as objects (one of these classes uses composition for a facade-like interface , but that will be further documented below). 
 
-We chose to implement pagination and also use a CDC log architecture; the `unique key` column in the raw data is unordered and thus cannot be accurately used to save extractions states. Instead, we used CDC logging so that new data pulled from the API after the initial extraction can be ran through a separate database that checks if the records are new, have been updated, or have been deleted since the last pull. 
+We implemented keyset pagination alongside a Change Data Capture (CDC) architecture. Because the `unique_key` field is not chronologically ordered, it cannot be used by itself as a reliable pagination cursor. Instead, extraction state is tracked using a composite cursor consisting of `created_date` and `unique_key`, where `created_date` provides chronological ordering and `unique_key` acts as a tie-breaker. Separately, CDC compares records between complete snapshots to identify records that have been inserted, updated, restored, or deleted. The inner workings of these processes is outlined below.
 
-The inner workings of these processes is outlined below.
 ### The `Extractor` Class
 The main purpose of the `Extractor` class is to handle pulling records from the API, write them to JSON, and log every step in the process along the way. This workflow is independent of the state of the records (that is handled by a separate class). There is an `Extractor()` object that needs to be initialized that can then has methods and attributes that allow it to perform the steps outlined above. The initialization, methods, and attributes of the class are all outlined below
 
@@ -65,7 +64,7 @@ http_headers = {
     "Accept" : "application/json"
 }
 batch_size = 1000
-extractor = Extractor(headers, batch_size)
+extractor = Extractor(http_headers, batch_size)
 ```
 An `Extractor` object has ten attributes including the two passed in as arguments at initialization, these are:
 * `endpoint` - The URL for the API endpoint (not variable for this project, static upon initialization)
@@ -82,16 +81,16 @@ An `Extractor` object has ten attributes including the two passed in as argument
 Upon initializing the object, the method handles environmental variable retrieval, creating a session, configuring the retry logic, and creating the HTTP adapter.
 
 #### -- `get_batch()` --
-Sends a request to the API for up to `batch_size` records, sorting the records from lowest unique key to highest unique key and from the oldest creation date to the newest creation date. 
+Sends a request to the API for up to `batch_size` records. Records are ordered from oldest to newest by `created_date`, with sharing the same `created_date` being ordered by `unique_key` in ascending order.
 
-When pulling the records, it checks each record against the previous pagination state if it exists; if `self.last_created_date` is not null, it finds where the records being pulled start having `created_date`s newer than the the created date of the last record in the last pull. 
+When pulling the records, if a pagination state already exists, the `$where` condition in the request parameters specifies that we only want to pull records occurring after the previously stored `created_date` or records with a greater `unique_key` that share the same `created_date`. 
 
 All of these steps are logged by the extractor's `logger` (any possible errors included), if the extractor has pulled zero records up to this point (`self.records_pulled == 0`), then the logger also prints the HTTP request and response.
 
-If successful, the method returns a `response` object from the `requests` module in Python's standard library.
+If successful, the method returns a list of raw JSON parsed from the `response` object (from the `requests` module in Python's standard library).
 
 #### -- `dump_batch(batch)` --
-Takes the output from the `get_batch()` method (the `batch` parameter) and writes it to JSON. Nothing special here, it uses UTF-8 encoding and writes it the file path in the extractor's `dump_path` attribute`
+Takes the output from the `get_batch()` method (the `batch` parameter) and writes it to JSONL. Nothing special here, it uses UTF-8 encoding and writes it the file path in the extractor's `dump_path` attribute`
 
 ### The `CDC` Class
 The main purpose of the `CDC` class is to monitor the state of each record so that we don't end up having repeats, untracked deletions, or updates in the raw data that aren't reflected in the data served to the users. 
@@ -114,11 +113,11 @@ How this process works is further outlined under the `CDCState().calculate_hash`
 
 In short, each record has a unique hash generated, and if during the next snapshot, the new hash is identical to the old hash, then the record hasn't changed at all since the data used to generate the hash must be the same, and is ignored. If the new hash differs from the old hash, then the record was updated since the data used to generate the old hash must've changed. If there is not a pre-existing hash associated with the record's unique key, then the record is being inserted since it's never been processed before.
 
-Once the state of each record has been determined, the method logs each records unique key along with the operation being performed: either `INSERT` for new records, `RESTORE` for deleted records that are being re-entered (more on this later), or `UPDATE` for pre-existing records that are being updated.
+Once the state of each record has been determined, the method logs each records unique key along with the operation being performed: either `INSERT` for new records, `RESTORE` for deleted records that are being re-entered (more on this later), or `UPDATE` for pre-existing records that are being updated. Unchanged records are not logged.
 
 Once logged, it then updated each records state inside the CDC database using the `CDCstate().update_state` method.
 
-#### -- `CDC().process_deletion()` --
+#### -- `CDC().process_deletions()` --
 The nature of the `DELETE` operation occurring on pre-existing records means that processing any possible deletions needs to occur once the entire extraction for that unit (whether its hourly, daily, weekly, etc.). 
 
 We can't process deletions as they come in with each individual batch because the deletion of a pre-existing record depends entirely on whether that record is present in the next snapshot from the API. Thus we have this second method just for deletions that runs at the conclusion of the batch processing loop for each snapshot.
@@ -155,7 +154,7 @@ Intakes the connection to the CDC PSQL database and the current run ID, it check
 For all records found that fulfill that condition, their unique keys are returned by the method as a list of strings.
 
 #### -- `CDCState().mark_deleted(conn, src_ids)` --
-Intakes the connection to the CDC PSQL database, and a list of tuples containing unique keys for records that have been deleted (gathered from the `CDCState().get_deleted` method), this method sets the active status of all deleted records to `FALSE` inside the `cdc_state` table.
+Intakes the connection to the CDC PSQL database, and a list of strings containing unique keys for records that have been deleted (gathered from the `CDCState().get_deleted` method), this method sets the active status of all deleted records to `FALSE` inside the `cdc_state` table.
 
 ## Transformation
 
