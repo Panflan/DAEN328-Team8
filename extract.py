@@ -195,6 +195,7 @@ class CDC:
         Instantiates an `CDC()` object, a wrapper around the CDC logger & state classes. Has attributes:
             `logger` - The `Logger()` object for CDC logging
             `state` - The `State()` object for CDC state-keeping
+            `conn` - The connection to the CDC PSQL database
             `run_id` - The run id for this specific CDC object
         """
         self.logger = CDCLogger()
@@ -204,7 +205,7 @@ class CDC:
 
         # Starts new run associated with this CDC object
         with self.conn as conn:
-            self.run_id = self.state.start_run(conn)
+            self.run_id = self.start_run(conn)
 
 
     def process_batch(self, batch):
@@ -305,6 +306,28 @@ class CDC:
         # Returns the number of deleted ids (for logging purposes)
         return len(deleted_ids)
 
+    def start_run(self, conn) -> int:
+        """
+        Starts a unique CDC run in PSQL and returns the run id
+
+        Args:
+            conn: CDC PSQL database connection
+        """
+
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO cdc_runs DEFAULT VALUES
+                RETURNING run_id;
+                """
+            )
+
+            run_id = cursor.fetchone()[0]
+
+        conn.commit()
+
+        return run_id
+
     def finish_run(self, conn, run_id: int):
         """
         Changes the run state in the CDC PSQL database to completed
@@ -368,27 +391,6 @@ class CDCState:
             normalized.encode("utf-8")
         ).hexdigest()
 
-    def start_run(self, conn) -> int:
-        """
-        Starts a unique CDC run in PSQL and returns the run id
-
-        Args:
-            conn: CDC PSQL database connection
-        """
-
-        with conn.cursor() as cursor:
-            cursor.execute(
-                """
-                INSERT INTO cdc_runs DEFAULT VALUES
-                RETURNING run_id;
-                """
-            )
-
-            run_id = cursor.fetchone()[0]
-
-        conn.commit()
-
-        return run_id
 
     def get_existing(self, conn, src_ids: list[str]):
         """

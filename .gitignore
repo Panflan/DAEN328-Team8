@@ -13,6 +13,10 @@ data/imported_data.json
 .env.*
 !.env.example
 
+# Don't import the .gitignore, or your machine specific .vscode config files
+.vscode
+.gitignore
+
 __pycache__/
 *.pyc
 
