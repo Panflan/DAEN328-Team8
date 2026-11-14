@@ -13,6 +13,9 @@ data/imported_data.json
 .env.*
 !.env.example
 
+# This thing is pissing me off
+.DS_store
+
 # Don't import the .gitignore, or your machine specific .vscode config files
 .vscode
 .gitignore
