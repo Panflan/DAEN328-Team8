@@ -53,7 +53,7 @@ services:
       - .env
 
     volumes:
-    - ./data:/app/data
+      - ./data:/app/data
 
     depends_on:
       cdc_db:
