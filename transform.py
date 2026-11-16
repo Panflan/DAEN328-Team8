@@ -28,10 +28,7 @@ TEXT_COLUMNS = [
 ]
 
 """
-THIS MAY CHANGE DEPENDING ON THE DASHBOARD
-NEEDS 
-
-not in list:`
+not in list:
 cross_street_1, cross_street_2, intersection_street_1, 
 intersection_street_2, address_type, bbl, x_coordinate_state_plane,
 y_coordinate_state_plane, park_facility_name, park_borough, location
@@ -50,7 +47,7 @@ def date_time_format(record): #make sure to change this based on new dtataset
                 continue
             try:
                 dt = datetime.fromisoformat(record[col])
-                record[col] = dt.isoformat(timespace="seconds")
+                record[col] = dt.isoformat(timespec="seconds")
             except (ValueError, TypeError):
                 record[col] = None
     return record
@@ -76,7 +73,7 @@ def standardization(record):
     for col in TEXT_COLUMNS:
         value = record.get(col)
         if isinstance(value, str):
-            value = "".join(value.split())
+            value = " ".join(value.split())
 
             if col in ["agency", "city", "borough", "community_board", 
                    "open_data_channel_type", "incident_address",
@@ -101,11 +98,7 @@ def convert_types(record):
 
     return record
 
-#=========================
 
-#this drops unnessary columns 
-
-#=========================
 def column_drop(record):
     return {
         col: record.get(col)
