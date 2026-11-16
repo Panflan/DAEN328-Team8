@@ -2,3 +2,6 @@ requests
 python-dotenv
 psycopg2-binary
 pytest
+streamlit
+sqlalchemy
+pandas
