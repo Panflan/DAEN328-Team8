@@ -223,7 +223,20 @@ Inside of the ETL image, the `load_record(records, connection)` function from `l
 When `transform.py` is merged, `etl.py` automatically calls its `transform_data(records)` function before loading. Until then, the ETL logs that it has loaded the extracted records unchanged.
 
 ## Visualization
+The dashboard connects to the PostgreSQL database and retrieves the cleaned service request data by the ETL pipeline. The dashboard is designed to help users identify patterns in service requests across NYC's 5 boroughs and over time. 
 
+Dashboard features:
+- Borough and year filters: allow users to narrow the displayed data by borough and year
+- Displays the total service requests matching the filters
+- Shows the most common complaint types and their frequency
+- Shows how service request volume changes over time
+- Compares the distribution of service requests across NYC boroughs
+
+Data handling:
+The dashboard gets data directly from PostgreSQL and uses relational tables created by the loading component. 
+
+Running the dashboard:
+python -m streamlit run streamlit_app.py
 ## ETL Orchestration
 
 ## Dockerization
