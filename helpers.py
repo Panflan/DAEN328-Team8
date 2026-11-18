@@ -47,4 +47,41 @@ def create_psql_tables(psql_conn):
     psql_conn.commit()
 
 
+def load_incremental_state(conn):
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT state_value
+            FROM extraction_state
+            WHERE state_key = 'last_incremental_created_date';
+            """
+        )
 
+        row = cursor.fetchone()
+
+    if row is None:
+        return None
+
+    return row[0]
+
+
+def save_incremental_state(conn, created_date):
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO extraction_state (
+                state_key,
+                state_value
+            )
+            VALUES (
+                'last_incremental_created_date',
+                %s
+            )
+            ON CONFLICT (state_key)
+            DO UPDATE SET
+                state_value = EXCLUDED.state_value;
+            """,
+            (created_date,)
+        )
+
+    conn.commit()

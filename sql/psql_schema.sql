@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS service_requests (
     resolution_description TEXT,
     incident_address VARCHAR(255),
     location_type VARCHAR(100),
-    source_updated_at TIMESTAMPTZ NOT NULL,
     loaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

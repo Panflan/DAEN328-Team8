@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS cdc_state (
 
 CREATE TABLE IF NOT EXISTS cdc_change_log (
     event_id BIGSERIAL PRIMARY KEY,
+    run_id BIGINT NOT NULL,
     source_id TEXT NOT NULL,
     operation VARCHAR(10) NOT NULL,
     changed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -18,4 +19,9 @@ CREATE TABLE IF NOT EXISTS cdc_runs (
     run_id BIGSERIAL PRIMARY KEY,
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS extraction_state (
+    state_key TEXT PRIMARY KEY,
+    state_value TEXT NOT NULL
 );

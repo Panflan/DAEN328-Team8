@@ -16,6 +16,29 @@ def to_float(value):
     except (TypeError, ValueError):
         return None
 
+# ====
+# Added to fix deletion logic from extraction, ie, make it reflect in the main psql db
+
+def delete_records(source_ids, connection):
+    if not source_ids:
+        return 0
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            DELETE FROM service_requests
+            WHERE unique_key = ANY(%s);
+            """,
+            (source_ids,)
+        )
+
+        deleted_count = cursor.rowcount
+
+    connection.commit()
+
+    return deleted_count
+# ====
+
 
 def make_location_key(record):
     """Build a readable location key from fields that describe one location."""

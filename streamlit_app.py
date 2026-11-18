@@ -27,8 +27,8 @@ if all([db_user, db_password, db_name]):
         "postgresql+psycopg2",
         username=db_user,
         password=db_password,
-        host="127.0.0.1",
-        port=5433,
+        host=os.getenv("PSQL_HOST"),
+        port=os.getenv("PSQL_PORT"),
         database=db_name
     )
     engine = create_engine(DB_URL)
@@ -208,6 +208,16 @@ ORDER BY total_requests DESC
 LIMIT 10;
 """
 
+# ====
+# This section fixes a fatal error inside of Postgres when the where clause is empty 
+resolution_filters = filters.copy()
+
+resolution_filters.append("sr.closed_date IS NOT NULL")
+resolution_filters.append("sr.closed_date >= sr.created_date")
+
+resolution_where_clause = "WHERE " + " AND ".join(resolution_filters)
+# ====
+
 resolution_query = f"""
 SELECT
     ct.complaint_type,
@@ -221,7 +231,7 @@ JOIN complaint_types ct
     ON sr.complaint_type_id = ct.complaint_type_id
 LEFT JOIN locations l
     ON sr.location_id = l.location_id
-{where_clause}
+{resolution_where_clause}
 AND sr.closed_date IS NOT NULL
 AND sr.closed_date >= sr.created_date
 GROUP BY ct.complaint_type

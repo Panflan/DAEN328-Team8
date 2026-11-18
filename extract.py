@@ -5,7 +5,6 @@ import logging
 import hashlib
 
 from dotenv import load_dotenv
-from helpers import get_cdc_connection
 
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -18,7 +17,12 @@ logging.basicConfig(
 
 class Extractor:
 
-    def __init__(self, headers: dict[str, str] , batch_size: int):
+    def __init__(
+            self,
+            headers: dict[str, str],
+            batch_size: int,
+            incremental_since: str | None = None
+        ):
         """ 
         Instantiates an `Extractor()` object, which has attributes:
             `endpoint` - API endpoint URL
@@ -31,10 +35,12 @@ class Extractor:
             `last_unique_key` - The 'unique_key' field of the last record pulled
             `logger` - Extractor specific logger
             `session` - Keeps the extractor connected to the API even if it fails to extract
+            `incremental_since` - Stops the extractor from pulling records it already has pulled unless they've been updated
 
         Args:
             headers: HTTP headers for the extraction request
             batch_size: Size of each paginated batch
+            incremental_since: date of last increment
         
         """
 
@@ -59,22 +65,23 @@ class Extractor:
         self.records_pulled = 0
         self.records_processed = 0
 
-        self.last_created_date = None
+        self.last_created_date = incremental_since
         self.last_unique_key = None
 
         self.logger = logging.getLogger(__name__)
 
         self.session = requests.Session()
         self.session.mount("https://", adapter)
+        self.incremental_since = incremental_since
 
 
 
 
     def get_batch(self):
         """
-        Calls the NYC API
+        Calls the NYC API, retrieves batch JSON from the response
 
-        Returns a response object from the `requests` module
+        returns JSON batch
         """
         self.logger.info(f"Sending GET request for up to {self.batch_size} records")
 
@@ -179,7 +186,7 @@ class Extractor:
 
         self.logger.info(f"Writing {len(batch)} records to JSON @ {self.dump_path}")
 
-        with open(self.dump_path, "w", encoding="utf-8") as file:
+        with open(self.dump_path, "a", encoding="utf-8") as file:
             for record in batch:
                     file.write(json.dumps(record) + "\n") # Appends new record to file
 
@@ -202,10 +209,8 @@ class CDC:
         self.state = CDCState()
         self.conn = conn
 
-
         # Starts new run associated with this CDC object
-        with self.conn as conn:
-            self.run_id = self.start_run(conn)
+        self.run_id = self.start_run()
 
 
     def process_batch(self, batch):
@@ -269,7 +274,7 @@ class CDC:
             self.state.update_state(conn, state_updates, self.run_id)
 
             # Write only the actual changes to the log
-            self.logger.log_changes(conn, changes)
+            self.logger.log_changes(conn, self.run_id, changes)
 
             # Commit the current set of changes
             conn.commit()
@@ -287,7 +292,7 @@ class CDC:
 
             # Returns 0 if there are no deleted ids (for logging purposes)
             if not deleted_ids:
-                return 0
+                return []
             
             # Creates a list of (id, "DELETE") tuples
             deletions = [
@@ -296,25 +301,24 @@ class CDC:
             ]
 
             # Logs the deletions to the CDC change log
-            self.logger.log_changes(conn, deletions)
+            self.logger.log_changes(conn, self.run_id, deletions)
 
             # Changes the active state of the deleted records from TRUE to FALSE
             self.state.mark_deleted(conn, deleted_ids)
 
             conn.commit()
 
+            return deleted_ids
+
         # Returns the number of deleted ids (for logging purposes)
         return len(deleted_ids)
 
-    def start_run(self, conn) -> int:
+    def start_run(self) -> int:
         """
         Starts a unique CDC run in PSQL and returns the run id
-
-        Args:
-            conn: CDC PSQL database connection
         """
 
-        with conn.cursor() as cursor:
+        with self.conn.cursor() as cursor:
             cursor.execute(
                 """
                 INSERT INTO cdc_runs DEFAULT VALUES
@@ -324,19 +328,18 @@ class CDC:
 
             run_id = cursor.fetchone()[0]
 
-        conn.commit()
+        self.conn.commit()
 
         return run_id
 
-    def finish_run(self, conn, run_id: int):
+    def finish_run(self, run_id: int):
         """
         Changes the run state in the CDC PSQL database to completed
 
         Args:
-            conn: CDC PSQL database connection
             run_id: the run id for this CDC run
         """
-        with conn.cursor() as cursor:
+        with self.conn.cursor() as cursor:
             cursor.execute(
                 """
                 UPDATE cdc_runs
@@ -346,13 +349,15 @@ class CDC:
                 (run_id,)
             )
 
+        self.conn.commit()
+
 
 
 
 
 class CDCLogger:
 
-    def log_changes(self, conn, changes: list[tuple[str,str]]):
+    def log_changes(self, conn, run_id, changes: list[tuple[str,str]]):
         """
         Logs CDC events to the CDC change log table in the PSQL database
 
@@ -365,10 +370,10 @@ class CDCLogger:
             for source_id, operation in changes:
                 cursor.execute(
                     """
-                    INSERT INTO cdc_change_log (source_id, operation)
-                    VALUES (%s, %s);
+                    INSERT INTO cdc_change_log (run_id, source_id, operation)
+                    VALUES (%s, %s, %s);
                     """, 
-                    (source_id, operation)
+                    (run_id, source_id, operation)
                 ) 
 
 class CDCState:

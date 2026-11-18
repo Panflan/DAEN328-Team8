@@ -194,7 +194,7 @@ def transform_data(max_records=None):
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
-        format="%(levelname)s | %(message)s"
+        format="%(asctime)s | %(name)s | %(levelname)s | %(message)s"
     )
 
     transform_data(max_records=10000)
